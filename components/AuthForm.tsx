@@ -6,12 +6,14 @@ import { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import { Form } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth"
 import Image from "next/image"
 import Link from "next/link"
 import { toast } from "sonner"
 import FormField from "./FormField"
 import { useRouter } from "next/navigation"
+import { auth } from "@/firebase/client"
+import { signIn, signUp } from "@/lib/actions/auth.action"
 
 
 const authFormShecma = (type: FormType) => {
@@ -26,7 +28,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
 
   const formSchema = authFormShecma(type)
 
-  const router=useRouter()
+  const router = useRouter()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -38,16 +40,54 @@ const AuthForm = ({ type }: { type: FormType }) => {
   })
 
   // 2. Define a submit handler.
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-
+      // signing up
+      // this will generate a token sent to the server side
       if (type === "sign-up") {
+
+        const { name, email, password } = values
+
+        const userCredentials = await createUserWithEmailAndPassword(auth, email, password)
+
+        const result = await signUp({
+          uid: userCredentials.user.uid,
+          name: name!,
+          email,
+          password
+
+        })
+
+        if (!result?.success) {
+          toast.error(result?.message)
+          return
+        }
+        // or else success
         toast.success("Account Created Successfully! 🎉 Please Sign In to your Account.")
         router.push("/sign-in")
       } else {
+
+        const { email, password } = values
+
+        const userCredential = await signInWithEmailAndPassword(auth, email, password)
+
+        // to get the id token
+        const idToken = await userCredential.user.getIdToken()
+
+        if (!idToken) {
+          toast.error(`Sign In Failed!`)
+          return
+        }
+
+        // then make it to be signed in
+        await signIn({
+          email, idToken
+        })
+
+
         toast.success("Signed In Successfully! 🎉")
-        router.push("/")     
-       }
+        router.push("/")
+      }
 
     } catch (error) {
       console.log(error)
@@ -62,7 +102,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
       <div className="flex flex-col gap-6 card py-14 px-10">
         <div className="flex flex-row gap-2 justify-center">
           <Image src={"/logo.svg"} alt="logo" height={32} width={38} />
-          <h2 className="text-primary-100">RhetoriQ</h2>
+          <h2 className="text-primary-100">TactIQ</h2>
         </div>
 
 
@@ -74,12 +114,12 @@ const AuthForm = ({ type }: { type: FormType }) => {
 
 
             {!isSignIn && (
-              <FormField 
-              control={form.control} 
-              name={"name"} 
-              label="Name" 
-              placeholder=" Enter Your Name"
-               />
+              <FormField
+                control={form.control}
+                name={"name"}
+                label="Name"
+                placeholder=" Enter Your Name"
+              />
             )}
             <FormField
               control={form.control}
